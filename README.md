@@ -1,6 +1,8 @@
 WoW 3.3.5 addon.
 
-Half-Life 1 style HUD percentage movable (with SHIFT/CTRL/ALT) indicators of health, power and movement speed.
+Half-Life 1 style HUD percentage movable (with SHIFT/CTRL/ALT) and resizable (with SHIFT/CTRL/ALT+mouse wheel)  indicators of health, power and movement speed.
+
+https://www.youtube.com/watch?v=FZ5lwgrIxIs
 
 ![image](https://github.com/user-attachments/assets/f38443d8-5d5e-4132-96ff-8986acb57617)
 
