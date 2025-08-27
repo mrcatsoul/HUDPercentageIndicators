@@ -156,7 +156,7 @@ do
       return
     end
     
-    hpPerc = (UnitHealth("player") / UnitHealthMax("player")) *100
+    hpPerc = math.min((UnitHealth("player") / UnitHealthMax("player")) *100, 100)
 
     if cfg["color_gradient"] then
       if hpPerc>=100 then
@@ -297,8 +297,6 @@ do
   local function RGBGradient(num)
     local r, g, b = ColorGradient(num, unpack(gradientColor))
     return r, g, b
-    --local hexColor = string.format("%02x%02x%02x", r * 255, g * 255, b * 255)
-    --return hexColor
   end
   
   local function GradientGreyYellow(num)
@@ -333,13 +331,18 @@ do
     local speedPerc = (GetUnitSpeed("player") / 7) *100
     
     if cfg["color_gradient"] then
-      --r, g, b = RGBGradient(1 - speedPerc / 250)
-      if speedPerc >= 100 then
-        r, g, b = GradientWhiteRed((speedPerc-100) / 200)
-      elseif speedPerc > 0 and speedPerc < 100 then
-        r, g, b = GradientGrayWhite((speedPerc-100) / 100)
+      if speedPerc >= 130 then
+        r, g, b = RGBGradient(1 - speedPerc / 200)
+      elseif speedPerc > 100 then
+        r, g, b = 1, 0.9, 0.1
+      elseif speedPerc == 100 then
+        r, g, b = 1, 1, 0.9
+      elseif speedPerc > 50 then
+        r, g, b = 1, 0.5, 0
+      elseif speedPerc > 0 then
+        r, g, b = 1, 0.1, 0.1
       elseif speedPerc == 0 then 
-        r, g, b = 0.75, 0.75, 0.75 
+        r, g, b = 0.7, 0.7, 0.7
       end
     else  
       r, g, b = DEF_RED, DEF_GREEN, DEF_BLUE
@@ -383,14 +386,32 @@ do
     
     local speedPerc = (GetUnitSpeed("target") / 7) *100
     
+    -- if cfg["color_gradient"] then
+      -- --r, g, b = RGBGradient(1 - speedPerc / 250)
+      -- if speedPerc >= 100 then
+        -- r, g, b = GradientWhiteRed((speedPerc-100) / 200)
+      -- elseif speedPerc > 0 and speedPerc < 100 then
+        -- r, g, b = GradientGrayWhite((speedPerc-100) / 100)
+      -- elseif speedPerc == 0 then 
+        -- r, g, b = 0.75, 0.75, 0.75 
+      -- end
+    -- else  
+      -- r, g, b = DEF_RED, DEF_GREEN, DEF_BLUE
+    -- end
+    
     if cfg["color_gradient"] then
-      --r, g, b = RGBGradient(1 - speedPerc / 250)
-      if speedPerc >= 100 then
-        r, g, b = GradientWhiteRed((speedPerc-100) / 200)
-      elseif speedPerc > 0 and speedPerc < 100 then
-        r, g, b = GradientGrayWhite((speedPerc-100) / 100)
+      if speedPerc >= 130 then
+        r, g, b = RGBGradient(1 - speedPerc / 150)
+      elseif speedPerc > 100 then
+        r, g, b = 1, 0.9, 0.1
+      elseif speedPerc == 100 then
+        r, g, b = 0.9, 0.9, 0.9
+      elseif speedPerc > 50 then
+        r, g, b = 1, 0.5, 0.1
+      elseif speedPerc > 0 then
+        r, g, b = 1, 0.1, 0.1
       elseif speedPerc == 0 then 
-        r, g, b = 0.75, 0.75, 0.75 
+        r, g, b = 0.7, 0.7, 0.7
       end
     else  
       r, g, b = DEF_RED, DEF_GREEN, DEF_BLUE
