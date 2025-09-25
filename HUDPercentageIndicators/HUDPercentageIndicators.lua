@@ -1,8 +1,26 @@
 local ADDON_NAME, core = ...
+
 local OPACITY = 0.7
 local SIZE = 25
 local FONT = "Interface\\addons\\"..ADDON_NAME.."\\fonts\\trebucbd.ttf"
 local DEF_RED, DEF_GREEN, DEF_BLUE = 1, 0.7, 0.3
+
+local min, max, abs, strf, ceil, modf = 
+  math.min, math.max, math.abs, string.format, math.ceil, math.modf
+local select, pairs, ipairs, unpack = select, pairs, ipairs, unpack
+
+local UnitHealth, UnitHealthMax = UnitHealth, UnitHealthMax
+local UnitPower, UnitPowerMax = UnitPower, UnitPowerMax
+local UnitPowerType = UnitPowerType
+local UnitGUID = UnitGUID
+local UIFrameFadeIn, UIFrameFadeOut = UIFrameFadeIn, UIFrameFadeOut
+local GetUnitSpeed = GetUnitSpeed
+local UnitMana, UnitManaMax = UnitMana, UnitManaMax
+local GetTime = GetTime
+local UnitIsDeadOrGhost = UnitIsDeadOrGhost
+
+local frames, cfg = {}, {}
+local curManaPercentAnnounceTime = {}
 
 local tmp = {
   ["Health"] = "Interface\\addons\\"..ADDON_NAME.."\\texture\\healer_white2.tga",
@@ -11,13 +29,49 @@ local tmp = {
   ["TargetSpeed"]  = "Interface\\addons\\"..ADDON_NAME.."\\texture\\target.tga",
 }
 
-local frames,cfg = {},{}
+local function UnitManaPercent(unit)
+  return (UnitMana("player") / UnitManaMax("player")) *100
+end
 
-local UnitGUID = UnitGUID
+-- ключ(то что в квадратных скобках) - процент маны для анонса
+-- значение(после знака равно) - кд анонса в секундах
+local trackPercentValues = { 
+  [20] = 10,
+  [50] = 30, 
+}
 
 local f = CreateFrame("frame") 
 f:RegisterEvent("PLAYER_TARGET_CHANGED")
-f:SetScript("OnEvent", function(self, event, ...) self[event](self, ...) end)
+f:RegisterEvent("UNIT_MANA")
+f:RegisterEvent("PLAYER_ENTERING_WORLD")
+f:SetScript("OnEvent", function(self, event, ...) if self[event] then self[event](self, ...) end end)
+
+function f:PLAYER_ENTERING_WORLD(...)
+  wipe(curManaPercentAnnounceTime)
+  for perc, _cd in pairs(trackPercentValues) do
+    curManaPercentAnnounceTime[perc] = {
+      nextTime = GetTime() + 2,
+      curPercentWasAbove = (UnitManaPercent("player") >= perc),
+      cd = _cd,
+    }
+  end
+end
+
+function f:UNIT_MANA(...)
+  if ... == "player" and not UnitIsDeadOrGhost("player") and UnitManaMax("player") > 0 then
+    local manaPercent = UnitManaPercent("player")
+    local time = GetTime()
+    
+    for perc, v in pairs(curManaPercentAnnounceTime) do
+      if manaPercent < perc and v.curPercentWasAbove and v.nextTime < time then
+        curManaPercentAnnounceTime[perc].nextTime = time + v.cd
+        PlaySoundFile("interface\\addons\\"..ADDON_NAME.."\\sounds\\mana"..perc..".mp3")
+      end
+      curManaPercentAnnounceTime[perc].curPercentWasAbove = (manaPercent >= perc)
+    end
+  end
+end
+
 function f:PLAYER_TARGET_CHANGED()
   if not frames["TargetSpeed"] then return end
   if UnitGUID("target") then
@@ -37,12 +91,10 @@ local function StopMoving(self)
 end
 
 local function testflash(self, speed, minalpha)
-  if (not UIFrameIsFading(self)) then
-    if (self:GetAlpha() <= minalpha+0.01) then
-      --print("testflash","UIFrameFadeIn")
+  if not UIFrameIsFading(self) then
+    if self:GetAlpha() <= (minalpha+0.01) then
       UIFrameFadeIn(self, speed, minalpha, cfg["opacity"] or OPACITY)
-    elseif (self:GetAlpha() >= (cfg["opacity"] or OPACITY) - 0.01) then
-      --print("testflash","UIFrameFadeOut")
+    elseif self:GetAlpha() >= ((cfg["opacity"] or OPACITY) - 0.01) then
       UIFrameFadeOut(self, speed, cfg["opacity"] or OPACITY, minalpha)
     end
   end
@@ -53,49 +105,40 @@ local frameNum = 0
 for frameName,tex in pairs(tmp) do
   local f = CreateFrame("frame", ADDON_NAME.."_HUD_"..frameName.."_Frame", UIParent) 
   frames[frameName]=f
-  --f:RegisterForClicks()
   f:SetMovable(true)
   f:EnableMouse(false)
   f:EnableMouseWheel(false)
-  --f:SetPoint("CENTER")
-  --f:SetFrameLevel(1)
   f:SetSize(cfg["size"] and cfg["size"]*3 or SIZE*3, cfg["size"] or SIZE)
   f:SetFrameStrata("high")
   f:SetClampedToScreen(true)
-  --f:RegisterForDrag("LeftButton")
-  --f:SetBackdrop(StaticPopup1:GetBackdrop())
-  
+
   f:RegisterEvent("MODIFIER_STATE_CHANGED")
-  f:SetScript("OnEvent", function(self, event, ...) self[event](self, ...) end)
+  f:SetScript("OnEvent", function(self, event, ...) if self[event] then self[event](self, ...) end end)
 
   f:SetScript("OnMouseDown", StartMoving)
   f:SetScript("OnMouseUp", StopMoving)
-  --f:SetScript("OnDragStart", function() StartMoving(f) end)
-  --f:SetScript("OnDragStop", function() StopMoving(f) end)
-  
+
   function f:MODIFIER_STATE_CHANGED(...)
     if arg2==1 then
       f:EnableMouse(true)
       f:EnableMouseWheel(true)
-      --f:RegisterForDrag("LeftButton")
     else
       StopMoving(f)
       f:EnableMouse(false)
       f:EnableMouseWheel(false)
-      --f:RegisterForDrag()
     end
   end
   
   f:SetScript("OnMouseWheel", function(self, delta) 
     if not IsShiftKeyDown() then return end
     if (delta==1) then
-      cfg["size"]=math.ceil(self:GetHeight()+2)
+      cfg["size"]=ceil(self:GetHeight()+2)
       self:SetSize(cfg["size"]*3, cfg["size"])
       local texNewSize = self.tex:GetWidth()+2
       self.tex:SetSize(texNewSize, texNewSize)
       self.text:SetFont(FONT, select(2,self.text:GetFont())+2)
     elseif (delta==-1) then
-      cfg["size"]=math.ceil(self:GetHeight()-2)
+      cfg["size"]=ceil(self:GetHeight()-2)
       self:SetSize(cfg["size"]*3, cfg["size"])
       local texNewSize = self.tex:GetWidth()-2
       self.tex:SetSize(texNewSize, texNewSize)
@@ -129,17 +172,6 @@ frames["Speed"]:SetPoint("CENTER",0,-120)
 frames["TargetSpeed"]:SetPoint("CENTER",UIParent,"TOP",0,0)
 frames["TargetSpeed"]:Hide()
 
-local min, max, abs, strf = math.min, math.max, math.abs, string.format
-
-local UnitHealth, UnitHealthMax = UnitHealth, UnitHealthMax
-
-local UnitPower, UnitPowerMax = UnitPower, UnitPowerMax
-local UnitPowerType = UnitPowerType
-
-local UIFrameFadeIn,UIFrameFadeOut = UIFrameFadeIn,UIFrameFadeOut
-
-local GetUnitSpeed = GetUnitSpeed
-
 -- health
 do  
   local t, r, g, b, hpPerc, lowHp = 0
@@ -156,7 +188,7 @@ do
       return
     end
     
-    hpPerc = math.min((UnitHealth("player") / UnitHealthMax("player")) *100, 100)
+    hpPerc = min((UnitHealth("player") / UnitHealthMax("player")) *100, 100)
 
     if cfg["color_gradient"] then
       if hpPerc>=100 then
@@ -171,10 +203,8 @@ do
         r, g, b = 1, 0.6, 0.1
       elseif hpPerc>=25 then
         r, g, b = 1, 0.3, 0.1
-        --testflash(f.tex, 0.7, 0.4)
       else
         r, g, b = 1, 0, 0
-        --testflash(f.tex, 0.5, 0.3)
       end
     else
       r, g, b = DEF_RED, DEF_GREEN, DEF_BLUE
@@ -187,10 +217,10 @@ do
     if cfg["flash_on_low_hp"] then
       if hpPerc>=25 and hpPerc<45 then
         lowHp=true
-        testflash(f.tex, math.min((cfg["opacity"] or OPACITY), 0.7), math.min((cfg["opacity"] or OPACITY), 0.4))
+        testflash(f.tex, min((cfg["opacity"] or OPACITY), 0.7), min((cfg["opacity"] or OPACITY), 0.4))
       elseif hpPerc<25 then
         lowHp=true
-        testflash(f.tex, math.min((cfg["opacity"] or OPACITY), 0.5), math.min((cfg["opacity"] or OPACITY), 0.33))
+        testflash(f.tex, min((cfg["opacity"] or OPACITY), 0.5), min((cfg["opacity"] or OPACITY), 0.33))
       elseif lowHp then
         lowHp=nil
         UIFrameFadeIn(f.tex, 0.1, f.tex:GetAlpha(), cfg["opacity"] or OPACITY)
@@ -198,9 +228,7 @@ do
     end
 
     f.tex:SetVertexColor(r, g, b, f.tex:GetAlpha())
-    -- f.tex:SetAlpha(cfg["opacity"] or OPACITY)
     f.text:SetAlpha(cfg["opacity"] or OPACITY)
-    -- f.text:SetShadowOffset(cfg["font_shadow"] and 1,-1 or 0,0)
   end)
 end
 
@@ -223,7 +251,6 @@ do
     
     powerType = UnitPowerType("player")
     curPower = UnitPower("player")
-    --_powPerc = (curPower / UnitPowerMax("player")) *100
     powPerc = (powerType==6 or powerType==1 or powerType==2 or powerType==3) and curPower or (curPower / UnitPowerMax("player")) *100
 
     if cfg["color_gradient"] then
@@ -236,10 +263,8 @@ do
     f.tex:SetVertexColor(r, g, b)
     f.text:SetText(strf("%.0f", powPerc))
     
-    -- f.tex:SetAlpha(cfg["opacity"] or OPACITY)
     f.text:SetAlpha(cfg["opacity"] or OPACITY)
-    -- f.text:SetShadowOffset(cfg["font_shadow"] and 1,-1 or 0,0)
-    
+
     if powPerc>=90 then
       f.tex:SetTexture("Interface\\addons\\"..ADDON_NAME.."\\texture\\power100.tga")
     elseif powPerc>=70 then
@@ -284,7 +309,7 @@ do
 
     local num = select("#", ...) / 3
 
-    local segment, relperc = math.modf(perc * (num - 1))
+    local segment, relperc = modf(perc * (num - 1))
     local r1, g1, b1, r2, g2, b2 = select((segment * 3) + 1, ...)
 
     if r2 == nil then r2 = 1 end
@@ -355,7 +380,7 @@ do
       f.flashing=true
       f.tex:SetVertexColor(1, 1, 1)
       f.tex:SetTexture("Interface\\addons\\"..ADDON_NAME.."\\texture\\flash.tga")
-      testflash(f.tex, math.min((cfg["opacity"] or OPACITY), 0.4), math.min((cfg["opacity"] or OPACITY), 0.2))
+      testflash(f.tex, min((cfg["opacity"] or OPACITY), 0.4), min((cfg["opacity"] or OPACITY), 0.2))
     else
       if f.flashing then
         f.flashing=nil
@@ -365,9 +390,7 @@ do
       f.tex:SetVertexColor(r, g, b)
     end
     
-    -- f.tex:SetAlpha(cfg["opacity"] or OPACITY)
     f.text:SetAlpha(cfg["opacity"] or OPACITY)
-    -- f.text:SetShadowOffset(cfg["font_shadow"] and 1,-1 or 0,0)
   end)
   
   frames["TargetSpeed"]:SetScript("onupdate",function(f,e)
@@ -385,19 +408,6 @@ do
     local r, g, b
     
     local speedPerc = (GetUnitSpeed("target") / 7) *100
-    
-    -- if cfg["color_gradient"] then
-      -- --r, g, b = RGBGradient(1 - speedPerc / 250)
-      -- if speedPerc >= 100 then
-        -- r, g, b = GradientWhiteRed((speedPerc-100) / 200)
-      -- elseif speedPerc > 0 and speedPerc < 100 then
-        -- r, g, b = GradientGrayWhite((speedPerc-100) / 100)
-      -- elseif speedPerc == 0 then 
-        -- r, g, b = 0.75, 0.75, 0.75 
-      -- end
-    -- else  
-      -- r, g, b = DEF_RED, DEF_GREEN, DEF_BLUE
-    -- end
     
     if cfg["color_gradient"] then
       if speedPerc >= 130 then
@@ -419,9 +429,8 @@ do
     
     if speedPerc >= 250 then
       f.flashing=true
-      --f.tex:SetVertexColor(1, 1, 1)
       f.tex:SetTexture("Interface\\addons\\"..ADDON_NAME.."\\texture\\flash.tga")
-      testflash(f.tex, math.min((cfg["opacity"] or OPACITY), 0.4), math.min((cfg["opacity"] or OPACITY), 0.2))
+      testflash(f.tex, min((cfg["opacity"] or OPACITY), 0.4), min((cfg["opacity"] or OPACITY), 0.2))
     else
       if f.flashing then
         f.flashing=nil
@@ -434,9 +443,7 @@ do
     f.text:SetTextColor(r, g, b)
     f.text:SetText(strf("%d", speedPerc))
     
-    -- f.tex:SetAlpha(cfg["opacity"] or OPACITY)
     f.text:SetAlpha(cfg["opacity"] or OPACITY)
-    -- f.text:SetShadowOffset(cfg["font_shadow"] and 1,-1 or 0,0)
   end)
 end
 
@@ -557,7 +564,7 @@ settingsFrame:SetSize(width, height) -- Измените размеры фрей
 settingsFrame:SetAllPoints(InterfaceOptionsFramePanelContainer)
 
 settingsFrame:RegisterEvent("ADDON_LOADED")
-settingsFrame:SetScript("OnEvent", function(self, event, ...) self[event](self, ...) end)
+settingsFrame:SetScript("OnEvent", function(self, event, ...) if self[event] then self[event](self, ...) end end)
 function settingsFrame:ADDON_LOADED(addon)
   if addon==ADDON_NAME then
     core:initConfig()
