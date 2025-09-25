@@ -10,12 +10,10 @@ local min, max, abs, strf, ceil, modf =
 local select, pairs, ipairs, unpack = select, pairs, ipairs, unpack
 
 local UnitHealth, UnitHealthMax = UnitHealth, UnitHealthMax
-local UnitPower, UnitPowerMax = UnitPower, UnitPowerMax
-local UnitPowerType = UnitPowerType
+local UnitPower, UnitPowerMax, UnitPowerType = UnitPower, UnitPowerMax, UnitPowerType
 local UnitGUID = UnitGUID
 local UIFrameFadeIn, UIFrameFadeOut = UIFrameFadeIn, UIFrameFadeOut
 local GetUnitSpeed = GetUnitSpeed
-local UnitMana, UnitManaMax = UnitMana, UnitManaMax
 local GetTime = GetTime
 local UnitIsDeadOrGhost = UnitIsDeadOrGhost
 
@@ -29,8 +27,8 @@ local tmp = {
   ["TargetSpeed"]  = "Interface\\addons\\"..ADDON_NAME.."\\texture\\target.tga",
 }
 
-local function UnitManaPercent(unit)
-  return (UnitMana("player") / UnitManaMax("player")) *100
+local function UnitPowerPercent(unit)
+  return (UnitPower("player") / UnitPowerMax("player")) *100
 end
 
 -- ключ(то что в квадратных скобках) - процент маны для анонса
@@ -51,15 +49,15 @@ function f:PLAYER_ENTERING_WORLD(...)
   for perc, _cd in pairs(trackPercentValues) do
     curManaPercentAnnounceTime[perc] = {
       nextTime = GetTime() + 2,
-      curPercentWasAbove = (UnitManaPercent("player") >= perc),
+      curPercentWasAbove = (UnitPowerPercent("player") >= perc),
       cd = _cd,
     }
   end
 end
 
 function f:UNIT_MANA(...)
-  if ... == "player" and not UnitIsDeadOrGhost("player") and UnitManaMax("player") > 0 then
-    local manaPercent = UnitManaPercent("player")
+  if ... == "player" and not UnitIsDeadOrGhost("player") and UnitPowerType("player") == 0 then
+    local manaPercent = UnitPowerPercent("player")
     local time = GetTime()
     
     for perc, v in pairs(curManaPercentAnnounceTime) do
